@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Warung Omah – Kasir</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{margin:0;font-family:Arial;background:#f2f2f2;padding-bottom:70px;}
+header{background:#6a1b9a;color:#fff;padding:12px;display:flex;align-items:center;gap:10px}
+header h2{font-size:18px;margin:0}
+.box{padding:12px;max-height:calc(100vh - 170px);overflow:auto;}
+.top-bar{display:flex;align-items:center;gap:8px;background:#fff;padding:10px;border-radius:6px;margin-bottom:10px}
+.top-bar select,.top-bar input{flex:1;padding:8px}
+.product{background:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:6px;margin-bottom:8px}
+.avatar{width:40px;height:40px;border-radius:6px;background:#ddd;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#555}
+.prod-left{display:flex;align-items:center;gap:10px}
+.prod-name{font-weight:bold}
+.prod-price{color:#555}
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;background:#1e88e5;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:12px}
+.cart-page{position:fixed;top:0;left:0;right:0;bottom:0;background:#fff;display:none;flex-direction:column}
+.cart-header{background:#6a1b9a;color:#fff;padding:12px;display:flex;align-items:center;gap:10px}
+.cart-list{flex:1;overflow:auto;padding:12px}
+.cart-item{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.qty button{padding:4px 8px;margin:0 4px}
+.pay-bar{padding:12px;background:#1e88e5;color:#fff}
+button{border:none;background:none;color:inherit;font-size:16px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+<button>☰</button>
+<h2>Kasir</h2>
+</header>
+
+<div class="box">
+<div class="top-bar">
+<select id="filterKategori"></select>
+<input id="search" placeholder="Cari">
+<button onclick="openTambah()">+</button>
+</div>
+<div id="produkList"></div>
+</div>
+
+<div class="bottom-bar" id="bottomBar">
+<div>Keranjang: <span id="itemCount">0</span></div>
+<b>Total Rp <span id="total">0</span></b>
+</div>
+
+<div class="cart-page" id="cartPage">
+<div class="cart-header">
+<button onclick="toggleCart()">←</button>
+<b>Keranjang</b>
+</div>
+<div class="cart-list" id="cartList"></div>
+<div class="pay-bar">Total: Rp <span id="total2">0</span></div>
+</div>
+
+<div class="cart-page" id="tambahPage">
+<div class="cart-header">
+<button onclick="openTambah()">←</button>
+<b id="judulForm">Tambah Produk</b>
+</div>
+<div class="cart-list">
+<input id="namaBaru" placeholder="Nama produk" style="width:100%;padding:8px;margin-bottom:8px">
+<input id="hargaBaru" type="number" placeholder="Harga" style="width:100%;padding:8px;margin-bottom:8px">
+<select id="kategoriBaru" style="width:100%;padding:8px;margin-bottom:8px"></select>
+<input id="kategoriCustom" placeholder="Tambah kategori baru" style="width:100%;padding:8px;margin-bottom:8px">
+<button onclick="simpanProduk()" style="padding:10px;background:#1e88e5;color:#fff;border-radius:6px">Simpan</button>
+</div>
+</div>
+
+<script>
+let kategori = JSON.parse(localStorage.getItem('kategoriWarung')) || ['Makanan','Minuman','Lainnya'];
+let produk = JSON.parse(localStorage.getItem('produkWarung')) || [
+{nama:'Gas LPG',harga:23000,kategori:'Lainnya'},
+{nama:'Indomie',harga:3000,kategori:'Makanan'},
+{nama:'Es Teh',harga:3000,kategori:'Minuman'}
+];
+let cart = {};
+let editIndex = null;
+
+const list = document.getElementById('produkList');
+const totalEl = document.getElementById('total');
+const total2 = document.getElementById('total2');
+const countEl = document.getElementById('itemCount');
+const search = document.getElementById('search');
+const cartList = document.getElementById('cartList');
+const cartPage = document.getElementById('cartPage');
+const filterKategori = document.getElementById('filterKategori');
+const bottomBar = document.getElementById('bottomBar');
+
+function render(){
+  renderKategori();
+  // render ulang tanpa batas jumlah produk
+  list.innerHTML='';
+  const keyword = search.value.toLowerCase();
+  const kat = filterKategori.value;
+  produk
+    .map((p,idx)=>({...p,idx}))
+    .filter(p=>p.nama.toLowerCase().includes(keyword) && (!kat || p.kategori===kat))
+    .forEach(p=>{
+      const div=document.createElement('div');
+      div.className='product';
+      div.innerHTML=`<div class="prod-left"><div class=\"avatar\">${p.nama[0]}</div><div><div class=\"prod-name\">${p.nama}</div><div class=\"prod-price\">Rp ${p.harga.toLocaleString('id-ID')}</div></div></div><div><button onclick=\"editProduk(${p.idx}, event)\">Edit</button><button onclick=\"hapusProduk(${p.idx}, event)\">Hapus</button></div>`;
+      div.addEventListener('click',()=>add(p.idx));
+      list.appendChild(div);
+    });
+}
+
+function add(i){cart[i]=(cart[i]||0)+1;update();}
+function kurang(i){cart[i]--; if(cart[i]<=0) delete cart[i]; update(); renderCart();}
+function tambah(i){cart[i]++; update(); renderCart();}
+
+function update(){
+  let t=0,c=0;
+  Object.keys(cart).forEach(i=>{
+    t+=produk[i].harga*cart[i];
+    c+=cart[i];
+  });
+  totalEl.textContent=t.toLocaleString('id-ID');
+  total2.textContent=t.toLocaleString('id-ID');
+  countEl.textContent=c;
+}
+
+function toggleCart(){
+  cartPage.style.display = cartPage.style.display==='flex' ? 'none' : 'flex';
+  renderCart();
+}
+
+function renderCart(){
+  cartList.innerHTML='';
+  Object.keys(cart).forEach(i=>{
+    const d=document.createElement('div');
+    d.className='cart-item';
+    d.innerHTML=`<span>${produk[i].nama}</span><div class="qty"><button onclick="kurang(${i})">-</button><span>${cart[i]}</span><button onclick="tambah(${i})">+</button></div>`;
+    cartList.appendChild(d);
+  });
+}
+
+function openTambah(){
+  const tp=document.getElementById('tambahPage');
+  tp.style.display = tp.style.display==='flex' ? 'none' : 'flex';
+}
+
+function simpanProduk(){
+  const kc=kategoriCustom.value.trim();
+  if(kc && !kategori.includes(kc)){
+    kategori.push(kc);
+    localStorage.setItem('kategoriWarung',JSON.stringify(kategori));
+  }
+  const n=namaBaru.value.trim();
+  const h=parseInt(hargaBaru.value);
+  const k=kategoriCustom.value.trim() || kategoriBaru.value;
+  if(!n||!h||!k) return alert('Lengkapi data');
+  if(editIndex!==null){
+    produk[editIndex]={nama:n,harga:h,kategori:k};
+    editIndex=null;
+    judulForm.textContent='Tambah Produk';
+  }else{
+    produk.push({nama:n,harga:h,kategori:k});
+  }
+  localStorage.setItem('produkWarung',JSON.stringify(produk));
+  namaBaru.value=''; hargaBaru.value=''; kategoriBaru.value='';
+  document.getElementById('tambahPage').style.display='none';
+  render(); update();
+}
+
+function editProduk(i, e){ if(e) e.stopPropagation();
+  editIndex=i;
+  judulForm.textContent='Edit Produk';
+  namaBaru.value=produk[i].nama;
+  hargaBaru.value=produk[i].harga;
+  kategoriBaru.value=produk[i].kategori;
+  document.getElementById('tambahPage').style.display='flex';
+}
+
+function hapusProduk(i, e){ if(e) e.stopPropagation();
+  // hapus produk benar-benar dari list
+  if(confirm('Hapus produk?')){
+    produk.splice(i,1);
+    localStorage.setItem('produkWarung',JSON.stringify(produk));
+    render(); update();
+  }
+}
+
+bottomBar.onclick=toggleCart;
+search.oninput=render;
+filterKategori.onchange=render;
+
+function renderKategori(){
+  filterKategori.innerHTML='<option value="">Semua Produk</option>';
+  kategoriBaru.innerHTML='<option value="">Pilih Kategori</option>';
+  kategori.forEach(k=>{
+    filterKategori.innerHTML+=`<option>${k}</option>`;
+    kategoriBaru.innerHTML+=`<option>${k}</option>`;
+  });
+}
+renderKategori();
+render();
+</script>
+</body>
+</html>
